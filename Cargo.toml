@@ -6,3 +6,4 @@ edition = "2024"
 [dependencies]
 tree-sitter = "0.25.3"
 git2 = "0.18"
+fuser = "0.15"
