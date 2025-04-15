@@ -6,13 +6,12 @@
 
 This project explores replacing Git's traditional line-based versioning with an Abstract Syntax Tree (AST)-based approach. The goal is to make version control language-aware, enabling semantic diffs/merges and consistent code formatting.
 
-**Current Focus:** Building a basic FUSE-based virtual filesystem POC using Rust (`fuser`, `git2`). This initial phase validates mounting an existing Git repository and presenting its structure through a FUSE interface, laying the groundwork for future AST integration.
+**Current Focus:** Integrating Tree-sitter to parse source files from an existing Git repository into ASTs. This foundational step is necessary before exploring storage mechanisms or interaction models like FUSE.
 
-**POC Goal & Success Criteria:**
-*   Successfully mount an existing Git repository via the `git-ast` tool.
-*   List (`ls`) and retrieve basic attributes (`ls -l`) for top-level files/directories within the mount point, reflecting the actual repository state.
-
-*(Self-Correction/Critique points regarding FUSE necessity and Replacement vs. Extension are noted below in the Architecture section).*
+**Initial POC Goal & Success Criteria:**
+*   Successfully parse a sample source file (e.g., Rust) from a target Git repository using Tree-sitter within the `git-ast` tool.
+*   Represent the parsed AST in memory (e.g., using Tree-sitter's data structures).
+*   (Stretch Goal): Define a basic strategy for mapping this AST structure to Git blob/tree objects conceptually.
 
 ## Motivation
 
@@ -60,74 +59,50 @@ This architecture ensures the developer's experience (editing files and using Gi
 
 ## Roadmap
 
-### Phase 1: FUSE Filesystem POC (Current)
-**Goal:** Demonstrate a working FUSE mount reflecting the basic structure of an existing Git repository.
--   [x] Basic FUSE mount setup using [`fuser`](https://docs.rs/fuser/) and [`git2`](https://docs.rs/git2/) (Rust bindings for `libgit2`).
--   [ ] **Implement `lookup`:** Resolve top-level filenames. (Test: `ls /mount/point/some_file`).
--   [ ] **Implement `getattr`:** Provide basic file attributes. (Test: `ls -l /mount/point`).
--   [ ] **Implement `readdir`:** List root directory contents. (Test: `ls /mount/point`).
--   [ ] Read basic Git repository information (HEAD commit, root tree) via `libgit2`.
-
-### Phase 2: Basic AST Representation & Read Operations
+### Phase 1: Basic AST Parsing & Representation (Current Focus)
+**Goal:** Parse source code into ASTs and define a conceptual mapping to Git objects.
 -   [ ] Integrate [Tree-sitter](https://tree-sitter.github.io/tree-sitter/) for one language (e.g., Rust).
--   [ ] Define AST-to-filesystem mapping (e.g., `file.rs/fn_foo/body/...`).
--   [ ] Implement FUSE `read` to generate source code from AST nodes.
--   [ ] Parse files from the Git repo into ASTs on demand.
+-   [ ] Implement logic to read a file from a specified Git repository (using [`git2`](https://docs.rs/git2/)) and parse it using Tree-sitter.
+-   [ ] Represent the parsed AST in memory.
+-   [ ] Define a conceptual mapping from AST nodes/structure to Git blobs/trees (as described in Architecture Overview).
+-   [ ] **Test:** Parse a known Rust file and verify the basic AST structure can be accessed programmatically.
 
-### Phase 3: Write Operations & Git Integration
--   [ ] Implement FUSE `write` interception.
--   [ ] Use Tree-sitter `edit()` to incrementally update AST from writes.
--   [ ] Implement `git add` wrapper: Update AST based on changed files.
--   [ ] Implement `git commit` wrapper: Serialize AST to Git objects (blobs/trees).
+### Phase 2: AST-based Git Object Storage
+**Goal:** Implement the serialization of ASTs into Git's object store.
+-   [ ] Define strategy for serializing the in-memory AST (from Phase 1) into Git blobs and trees based on the conceptual mapping.
+-   [ ] Implement basic `commit` functionality: Take the current AST state and write corresponding Git objects, creating a commit.
+-   [ ] **Compare:** Implement a way to compare the tree hash of a commit created via the AST method vs. a traditional commit of the same source code.
 
-### Phase 4: Semantic Operations
--   [ ] Implement AST-based `git diff` (using tree diffing).
--   [ ] Implement AST-based `git merge` (using 3-way AST merge).
+### Phase 3: Core AST API & Basic Code Generation
+**Goal:** Create an internal API for AST manipulation and code viewing.
+-   [ ] Design and implement an internal Rust API (e.g., a library module) to:
+    -   Load an AST from a Git commit (using Phase 2 logic).
+    -   Provide methods to query/navigate the AST.
+    -   (Optional) Implement basic AST modification primitives (e.g., update node value - needed for later phases).
+-   [ ] Implement basic code generation (pretty-printing) within the API: Given an AST (or subtree), generate the corresponding source code string.
+-   [ ] **Test:** Directly test the API functions: load AST, generate code, verify output.
+
+### Phase 4: CLI Wrapper Integration
+**Goal:** Build a command-line interface leveraging the Core AST API.
+-   [ ] Design basic CLI commands (e.g., `git-ast show <file>`, `git-ast commit`, `git-ast diff`).
+-   [ ] Implement the CLI commands by calling the Core AST API (from Phase 3).
+-   [ ] For `show`: Use the API's code generation.
+-   [ ] For `commit`: Use Phase 2 logic (potentially exposed via API).
+-   [ ] For `diff`: Initially, could show basic info or rely on Phase 6.
+-   [ ] **Test:** Run CLI commands and verify they interact correctly with the underlying API and Git repository.
+
+### Phase 5: FUSE Integration
+**Goal:** Implement the FUSE frontend using the Core AST API.
+-   [ ] Set up basic FUSE mount using [`fuser`](https://docs.rs/fuser/).
+-   [ ] Implement `lookup`, `getattr`, `readdir` by querying the Core AST API (which loads data from Git).
+-   [ ] Implement FUSE `read` using the API's code generation function.
+-   [ ] (Later) Implement FUSE `write` by capturing changes and eventually calling AST modification methods in the API.
+-   [ ] **Test:** Mount a repository, use standard filesystem commands (`ls`, `cat`) and verify they work correctly via the FUSE interface.
+
+### Phase 6: Semantic Operations
+**Goal:** Leverage the AST structure for smarter Git operations.
+-   [ ] Implement AST-based `git diff` within the Core API (using tree diffing), expose via CLI/FUSE.
+-   [ ] Implement AST-based `git merge` within the Core API (using 3-way AST merge), expose via CLI/FUSE.
 
 ### Future Enhancements
--   [ ] AST-based `git blame`.
--   [ ] Multi-language support.
--   [ ] Performance optimizations (caching, lazy loading, optimized status).
--   [ ] Handling comments, whitespace, preprocessor directives.
--   [ ] Stable AST node identification.
--   [ ] Enhanced CLI wrapper & editor integrations.
--   [ ] Containerized development environment.
--   [ ] **Advanced Git Object Store Integration:** Explore `info/alternates`, MIDX, `git replace` for deduplication/layering.
--   [ ] **Language-Agnostic AST Representation:** Investigate typed IR (e.g., Zod schemas) for cross-language features.
-
-## Setup
-
-### Prerequisites
-
-*   **Rust Toolchain:** Install via [rustup.rs](https://rustup.rs/).
-*   **[`libgit2`](https://libgit2.org/):** Required by the `git2` crate. Install via system package manager (e.g., `libgit2-dev` on Debian/Ubuntu, `libgit2` on macOS via Homebrew) or potentially let `cargo` build it (may require `cmake`, `pkg-config`, etc.).
-*   **FUSE Implementation:**
-    *   **macOS:** Install [macFUSE](https://osxfuse.github.io/) (`brew install macfuse`). Follow post-install instructions.
-    *   **Linux:** Install FUSE development libraries (e.g., `libfuse-dev` on Debian/Ubuntu, `fuse-devel` on Fedora).
-
-*(Note: Containerized development environments are planned to simplify setup).*
-
-### Running the POC
-
-1.  **Clone the repository:**
-    ```bash
-    git clone <your-repo-url>
-    cd git-ast
-    ```
-2.  **Build the project:**
-    ```bash
-    cargo build
-    ```
-3.  **Run the FUSE filesystem:**
-    Create a directory to use as a mount point:
-    ```bash
-    mkdir /tmp/git_mount
-    ```
-    Run the executable, providing the path to an *existing* Git repository and the mount point:
-    ```bash
-    # Replace /path/to/your/repo with an actual Git repository path
-    ./target/debug/git-ast /path/to/your/repo /tmp/git_mount
-    ```
-    Explore `/tmp/git_mount` in another terminal. Press Ctrl+C to unmount.
-
-**Warning:** This is early-stage POC software. Use a test repository. Functionality is currently limited to basic mounting and potentially listing root directory contents (pending Phase 1 completion).
+-   [ ] AST-based `
