@@ -1,0 +1,26 @@
+# Conceptual Text Diff (Formatting Change Only)
+
+# Imagine `01_original_source.rs` had inconsistent indentation.
+# A standard `git diff` would show many lines changed.
+
+--- a/examples/rust_simple_addition/01_original_source_bad_format.rs
++++ b/examples/rust_simple_addition/05_generated_source.rs
+@@ -1,11 +1,11 @@
+ fn add(a: i32, b: i32) -> i32 {
+-    // Simple addition
+-        a + b
++    // Simple addition
++    a + b
+ }
+ 
+ fn main() {
+-let x = 5;
+-    let y = 10;
+-        let sum = add(x, y);
+-    println!("Sum: {}", sum);
+-} 
++    let x = 5;
++    let y = 10;
++    let sum = add(x, y);
++    println!("Sum: {}", sum);
++} 

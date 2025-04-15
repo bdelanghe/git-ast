@@ -1,0 +1,8 @@
+# Conceptual AST Diff (Formatting Change Only)
+
+# When comparing the ASTs derived from the poorly formatted source
+# and the canonically formatted source, the AST-aware diff
+# (using a tool like difftastic or a custom git-ast driver)
+# should ideally report *no changes*, as the underlying structure is identical.
+
+(No structural changes detected) 

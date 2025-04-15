@@ -1,0 +1,26 @@
+{
+  "representation": "canonical_ast",
+  "version": "1.0",
+  "language": "rust",
+  "root": {
+    "type": "source_file",
+    "children": [
+      {
+        "type": "function_item",
+        "id": "func_add", // Conceptual ID, maybe hash-based
+        "name": "add",
+        // ... structure similar to CST but potentially simplified ...
+        // Comments might be attached nodes or metadata
+      },
+      {
+        "type": "function_item",
+        "id": "func_main",
+        "name": "main",
+        // ...
+      }
+    ]
+  }
+  // NOTE: This represents the AST *after* potential simplification/
+  // normalization, ready for serialization. It might omit fine-grained
+  // concrete syntax details captured in the initial CST.
+} 
