@@ -46,7 +46,8 @@ mod tests {
         let tree = parser.parse(&source_code, None);
         assert!(tree.is_some(), "Parsing failed");
 
-        let root_node = tree.unwrap().root_node();
+        let tree_unwrapped = tree.unwrap();
+        let root_node = tree_unwrapped.root_node();
         let actual_sexp = root_node.to_sexp();
 
         // NOTE: This expected output might be sensitive to formatting and exact tree-sitter version.
