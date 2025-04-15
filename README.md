@@ -54,11 +54,14 @@ This architecture aims to keep the developer's core experience (editing files, u
 
 ## Core Concepts & Challenges (Condensed)
 
-- **AST as Filesystem:** Representing the AST structure as a virtual filesystem (via FUSE) where nodes appear as files/directories. Maintaining order might require naming conventions (e.g., `1_`, `2_`) or metadata files.
+- **AST as Filesystem:** Representing the AST structure as a virtual filesystem (via FUSE) where nodes appear as files/directories. Child node order will be explicitly managed using a dedicated metadata file (e.g., `.order` or `_index.yaml`) within each directory, avoiding file renames for reordering operations.
 - **Code Generation (Pretty-Printing):** Reliably converting the AST back into human-readable, consistently formatted source code. This requires robust pretty-printers, ideally leveraging Tree-sitter grammars for accuracy. Achieving deterministic round-tripping (parse -> AST -> generate -> parse = identical AST) is a key goal.
 - **Semantic Diff/Merge:** Comparing ASTs directly to ignore formatting noise and intelligently handle structural changes (like refactorings) that might conflict textually. This relies on tree-diffing algorithms.
 - **Performance:** As noted in Architecture, storing many small AST node objects could affect Git performance. Mitigation strategies (CLI optimization, Git features, potentially adjusting AST granularity) will be important.
-- **Node Identity:** Reliably tracking the "same" semantic code element (e.g., a function) across commits, even if it's moved or modified, is crucial for accurate history and blame features. Potential solutions include content-hashing or embedding unique identifiers in the AST.
+- **Node Identity:** Reliably tracking the "same" semantic code element (e.g., a function, class, variable) across commits, even if it's moved, renamed, or significantly modified internally. This is crucial for accurate history, blame (`git blame`), and potentially for semantic merge conflict resolution. Without robust identity tracking, moving a function might appear as a deletion and an unrelated addition. Potential solutions include:
+    - **Content-Hashing:** Hashing the content or structure of a node (perhaps excluding volatile parts like comments or exact formatting). Similar nodes across commits would likely have the same hash.
+    - **Unique Identifiers (UIDs):** Embedding stable, unique identifiers directly within the AST nodes during parsing or transformation. These UIDs would persist across commits.
+    - **Heuristic Matching:** Using algorithms to match nodes based on similarity metrics (name, signature, content overlap) during diff/merge operations.
 - **Tool Compatibility:** Primarily addressed via FUSE and wrapping Git commands. Tools or hooks directly accessing `.git` might require adaptation or need to rely on the generated source views presented by FUSE.
 - **Non-Code Files:** Files without a supported Tree-sitter parser (e.g., images, text documents) will be handled by falling back to standard Git line-based behavior.
 
