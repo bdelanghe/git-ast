@@ -41,7 +41,7 @@ Setting this up requires configuration in two places:
 
 ### 1. `.gitattributes`
 
-This file, typically at the root of your repository, tells Git *which* files should be processed by our filter.
+This file, typically at the root of your repository, tells Git _which_ files should be processed by our filter.
 
 **Example:**
 
@@ -60,140 +60,105 @@ The `filter=ast` attribute instructs Git to use the filter named "ast" for match
 
 ### 2. Git Configuration (`.git/config` or global config)
 
-This defines *what* the "ast" filter actually does by specifying the commands for the clean and smudge operations. This configuration usually goes in the repository-specific `.git/config` file.
+This defines _what_ the "ast" filter actually does by specifying the commands for the clean and smudge operations. This configuration usually goes in the repository-specific `.git/config` file. Recommended setup uses the `git-ast` executable itself.
 
-**Example:**
+**Example using `git-ast` process:**
 
 ```ini
 [filter "ast"]
-    # Command to run when staging a file (source -> AST)
-    clean = ./scripts/encode-to-ast
-
-    # Command to run when checking out a file (AST -> source)
-    smudge = ./scripts/decode-from-ast
-
+    # Command for Git to invoke for clean/smudge
+    # Uses the long-running process protocol for efficiency
+    process = git-ast filter-process
     # Crucial: Treat filter failures as errors
     required = true
 ```
 
--   `clean`: Specifies the script/command that takes source code on `stdin` and outputs the serialized AST/CST on `stdout`.
--   `smudge`: Specifies the script/command that takes the serialized AST/CST from the Git object database on `stdin` and outputs reconstructed source code on `stdout`.
--   `required = true`: Ensures Git aborts the operation (e.g., `git add`, `git checkout`) if the filter fails, preventing data corruption.
+- `process = git-ast filter-process`: Specifies that Git should start the `git-ast` tool with the `filter-process` argument. This single process handles multiple files efficiently using Git's long-running filter protocol (see below).
+- `required = true`: Ensures Git aborts the operation (e.g., `git add`, `git checkout`) if the `git-ast filter-process` command fails or exits unexpectedly.
 
-## Filter Scripts (`encode-to-ast`, `decode-from-ast`)
+(Alternatively, one could configure separate `clean = ...` and `smudge = ...` commands pointing to specific scripts or `git-ast` subcommands, but the `process` approach is generally preferred for performance.)
 
-You need to implement these scripts (or compiled executables).
+## Core Filter Components (Conceptual)
 
-### `encode-to-ast` (Clean Script)
+The `git-ast filter-process` command needs to orchestrate several key technical components:
 
--   **Input:** Source code text via `stdin`.
--   **Action:**
-    1.  Parse the input code into an AST/CST (e.g., using Tree-sitter).
-    2.  Serialize the resulting AST/CST structure into a defined format (e.g., JSON, MessagePack, CBOR, S-expressions). Include necessary information like comments.
--   **Output:** Serialized AST/CST data via `stdout`.
+### Long-Running Process Protocol Handler
 
-**Pseudo-code Example:**
+- **Purpose:** Manages communication with the parent Git process over stdin/stdout.
+- **Functionality:**
+  - Performs initial handshake (advertising `clean` and `smudge` capabilities).
+  - Enters a loop reading requests from Git.
+  - For each request:
+    - Parses command (`clean` or `smudge`), pathname, and potentially other metadata.
+    - Reads the full file content sent by Git.
+    - Dispatches to the appropriate clean or smudge logic.
+    - Writes the status (`success`, `error`, `abort`) and resulting content back to Git.
+  - Handles protocol details like packet framing and termination.
 
-```python
-# Example: encode-to-ast (conceptual)
-import sys
-from tree_sitter_language import parser # Hypothetical parser
-import json # Or other serialization library
+### `clean` Operation Components
 
-source_code = sys.stdin.read()
-try:
-    tree = parser.parse(bytes(source_code, "utf8"))
-    # Extract relevant data from 'tree' (a Tree-sitter CST)
-    ast_representation = convert_ts_to_serializable(tree) # Your conversion logic
-    serialized_data = json.dumps(ast_representation)
-    sys.stdout.write(serialized_data)
-except Exception as e:
-    print(f"Error parsing/serializing: {e}", file=sys.stderr)
-    sys.exit(1) # Signal failure
-```
+- **Input:** Source code text (from Git via protocol handler), pathname.
+- **Output:** Serialized AST/CST data (sent to Git via protocol handler).
+- **Required Sub-components:**
+  1.  **Parser:** Takes source code bytes and the language (derived from pathname or config) and produces an in-memory AST/CST representation. Must handle comments and potentially preserve positional information if needed for advanced features. (e.g., leveraging a Tree-sitter library).
+  2.  **Serializer:** Takes the in-memory AST/CST and converts it into a defined byte format (e.g., MessagePack, CBOR, custom binary format, JSON). This format is what gets stored in Git.
+- **Error Handling:** Must reliably report parsing or serialization failures back via the protocol handler (e.g., `status=error`).
 
-### `decode-from-ast` (Smudge Script)
+### `smudge` Operation Components
 
--   **Input:** Serialized AST/CST data via `stdin`.
--   **Action:**
-    1.  Deserialize the input data back into an in-memory AST/CST representation.
-    2.  Generate formatted source code from the AST/CST (pretty-printing). This should ideally be deterministic.
--   **Output:** Generated source code text via `stdout`.
-
-**Pseudo-code Example:**
-
-```python
-# Example: decode-from-ast (conceptual)
-import sys
-import json # Or other serialization library
-from my_pretty_printer import generate_code # Hypothetical code generator
-
-serialized_data = sys.stdin.read()
-try:
-    ast_representation = json.loads(serialized_data)
-    # Reconstruct internal AST if needed
-    # reconstructed_ast = build_ast_from_data(ast_representation)
-    source_code = generate_code(ast_representation) # Your generation logic
-    sys.stdout.write(source_code)
-except Exception as e:
-    print(f"Error deserializing/generating: {e}", file=sys.stderr)
-    sys.exit(1) # Signal failure
-```
-
-These scripts must be executable and accessible from the path specified in the Git configuration.
+- **Input:** Serialized AST/CST data (from Git via protocol handler), pathname.
+- **Output:** Generated source code text (sent to Git via protocol handler).
+- **Required Sub-components:**
+  1.  **Deserializer:** Takes the serialized byte data (matching the format used by the `clean` serializer) and reconstructs the in-memory AST/CST representation.
+  2.  **Pretty-Printer/Code Generator:** Takes the in-memory AST/CST and generates formatted source code text. This process should be deterministic (same AST always yields same text) to ensure consistency. (e.g., using a code formatting library or custom generation logic).
+- **Error Handling:** Must reliably report deserialization or code generation failures back via the protocol handler.
 
 ## Performance Considerations
 
 Applying filters introduces overhead compared to standard Git operations:
 
--   **Parsing/Generation Cost:** Converting between text and AST/CST takes CPU time, especially for large files or complex languages.
--   **Process Startup:** Invoking separate `clean`/`smudge` processes for every file can be slow, particularly in repositories with thousands of tracked files.
+- **Parsing/Generation Cost:** Converting between text and AST/CST takes CPU time, especially for large files or complex languages.
+- **Serialization/Deserialization Cost:** The efficiency of the chosen serialization format and library impacts performance.
+- **Process Startup:** (Mitigated by using the `process` configuration and long-running filter protocol).
 
-**Mitigation Strategies:**
+**Mitigation Strategies (Focus Areas):**
 
-1.  **Long-Running Process Filters:** Configure Git to use a persistent filter process instead of invoking a script per file. This drastically reduces process startup overhead.
-    ```ini
-    [filter "ast"]
-        process = ./scripts/ast-filter-daemon # Your long-running filter daemon
-        required = true
-    ```
-    The daemon script must implement Git's specific [long-running filter protocol](https://git-scm.com/docs/gitattributes#_long_running_filter_process).
-
-2.  **Efficient Serialization:** Use compact and fast binary formats (e.g., MessagePack, CBOR, Protocol Buffers) instead of text-based ones like JSON for serializing ASTs/CSTs.
-
-3.  **Optimized Parsing/Generation:** Ensure the core parsing (Tree-sitter is generally fast) and code generation (pretty-printing) logic is efficient.
-
-4.  **Caching:** Implement caching within the filter process/daemon if identical content is frequently processed (though Git's hashing often mitigates this at the object level).
+1.  **Use Long-Running Process:** Essential for avoiding per-file startup cost. The `git-ast filter-process` must correctly implement this protocol.
+2.  **Choose Efficient Serialization:** Binary formats (MessagePack, CBOR, Protocol Buffers) are generally faster and more compact than text formats (JSON).
+3.  **Optimize Core Logic:** Ensure the parsing (Tree-sitter is typically fast), serialization/deserialization, and code generation components are implemented efficiently.
+4.  **Consider Caching:** The filter process could potentially cache results (e.g., parsed ASTs, generated code) based on content hashes if identical inputs are common, although careful implementation is needed to ensure correctness.
 
 ## Integration with Platforms (e.g., GitHub, GitLab)
 
 This is a critical limitation to understand: **Remote platforms like GitHub do not run your local clean/smudge filters.** They interact directly with the raw blob objects stored in the Git repository.
 
-Since `git-ast` stores *serialized AST/CST data* as blobs, this means:
+Since `git-ast` stores _serialized AST/CST data_ as blobs, this means:
 
--   **Web UI:** Browsing files on GitHub will show the raw serialized AST/CST data, not human-readable source code.
--   **Diffs:** Diffs generated by the platform (e.g., in Pull Requests) will compare the serialized AST/CST data, which is likely meaningless for code review.
--   **Pull Requests:** Merging PRs via the web UI might operate on the serialized data, bypassing the `smudge` filter and potentially leading to corrupted results if merge conflicts are resolved manually in the serialized format.
+- **Web UI:** Browsing files on GitHub will show the raw serialized AST/CST data, not human-readable source code.
+- **Diffs:** Diffs generated by the platform (e.g., in Pull Requests) will compare the serialized AST/CST data, which is likely meaningless for code review.
+- **Pull Requests:** Merging PRs via the web UI might operate on the serialized data, bypassing the `smudge` filter and potentially leading to corrupted results if merge conflicts are resolved manually in the serialized format.
 
 ### Workaround: Mirrored Repository via CI/CD
 
 A viable strategy for collaboration on platforms is to maintain two repositories:
 
 1.  **`my-project-ast` (Primary/Development):**
-    -   Uses the clean/smudge filters.
-    -   Stores AST/CST blobs.
-    -   Developers work here with correctly configured local Git environments.
+    - Uses the clean/smudge filters.
+    - Stores AST/CST blobs.
+    - Developers work here with correctly configured local Git environments.
 2.  **`my-project-source` (Mirror/Collaboration):**
-    -   Stores standard source code ("smudged" content).
-    -   Used for code browsing, pull requests, and CI/CD on platforms like GitHub.
+    - Stores standard source code ("smudged" content).
+    - Used for code browsing, pull requests, and CI/CD on platforms like GitHub.
 
-**Automation:**
+**Automation (CI/CD Technology Needed):**
 
-Set up a CI/CD pipeline (e.g., GitHub Actions, GitLab CI) in the `my-project-ast` repository:
--   **Trigger:** On every push to the primary repository (`my-project-ast`).
--   **Action:**
-    1.  The CI runner checks out the code. The checkout process automatically triggers the `smudge` filter, generating the source code in the runner's workspace.
-    2.  The CI job then pushes the generated source code files to the `my-project-source` repository.
+Requires a CI/CD pipeline (e.g., GitHub Actions, GitLab CI) configured in the `my-project-ast` repository:
+
+- **Trigger:** On pushes to the primary repository.
+- **Action:**
+  1.  **Checkout:** The CI runner checks out the code from `my-project-ast`. This _must_ occur in an environment where the `git-ast` filter is correctly configured and executable, so the checkout process triggers the `smudge` filter.
+  2.  **Generate Source:** The result of the checkout in the CI workspace is the generated source code.
+  3.  **Commit & Push:** The CI job commits these source files to a local clone of the `my-project-source` repository and pushes the changes.
 
 ```mermaid
 graph TD
@@ -202,9 +167,9 @@ graph TD
     end
 
     subgraph CI/CD Pipeline
-        Trigger[Push Event] --> Checkout(Checkout AST Repo<br/><i>Smudge Filter Runs</i>)
-        Checkout --> Workspace(Contains Source Code)
-        Workspace -- git push --> Source_Repo
+        Trigger[Push Event] --> Checkout(Checkout AST Repo<br/><i>Requires git-ast setup<br/>Smudge Filter Runs</i>)
+        Checkout --> Workspace(Workspace has Source Code)
+        Workspace -- git commit/push --> Source_Repo
     end
 
     subgraph Collaboration Platform [Mirror Repo: my-project-source]
@@ -216,32 +181,27 @@ graph TD
     AST_Repo -- Triggers --> Trigger
 ```
 
-This keeps the benefits of AST-based storage for local development while providing a standard source code view for collaboration platforms.
+This architecture keeps the benefits of AST-based storage locally while enabling standard workflows on remote platforms.
 
 ## Other Potential Customizations
 
-The filter mechanism can be complemented by other Git customizations:
+The filter mechanism can be complemented by other Git customizations, requiring corresponding subcommands in `git-ast`:
 
--   **Custom Diff Driver:** Configure Git to use a specific script for generating diffs, potentially comparing ASTs semantically instead of text lines.
-    ```gitattributes
-    *.js diff=ast
-    ```
-    ```ini
-    [diff "ast"]
-        command = ./scripts/ast-diff # Script takes paths, outputs diff
-    ```
--   **Custom Merge Driver:** Implement a merge driver that operates on the AST/CST level to perform more intelligent, syntax-aware merges.
-    ```gitattributes
-    *.js merge=ast
-    ```
-    ```ini
-    [merge "ast"]
-        name = AST merge driver
-        driver = ./scripts/ast-merge %O %A %B # %O=base, %A=ours, %B=theirs
-    ```
+- **Custom Diff Driver (`git-ast diff-driver`):**
+  - **Config:** `[diff "ast"] command = git-ast diff-driver`
+  - **Technology:** Requires AST/CST parsing, tree-differencing algorithms (e.g., GumTree), and diff formatting logic.
+  - **Function:** Compares two versions structurally and outputs a semantic diff.
+- **Custom Merge Driver (`git-ast merge-driver`):**
+  - **Config:** `[merge "ast"] driver = git-ast merge-driver %O %A %B ...`
+  - **Technology:** Requires AST/CST parsing, 3-way tree merging algorithms, conflict detection/marking strategies, and code generation.
+  - **Function:** Merges three versions structurally, potentially auto-resolving conflicts or marking them in the output file.
 
-These require implementing the respective `ast-diff` and `ast-merge` scripts, which involve significant challenges like tree differencing and structural conflict resolution.
+Implementing these drivers involves significant technical challenges beyond the basic filter pipeline.
 
 ## Filters for Compression
 
-While filters *could* be used to apply additional compression (e.g., LZ4, Zstd) on top of Git's built-in zlib compression, this is generally **not recommended** for AST/CST storage. The added complexity and processing overhead during clean/smudge usually outweigh the marginal benefits, especially if an efficient binary serialization format is already used for the AST/CST data. Git's delta compression on the blobs often provides sufficient size reduction. 
+While filters _could_ technically add another layer of compression, this is generally **not recommended** for AST/CST storage.
+
+- **Complexity:** Adds another step to both clean and smudge.
+- **Diminishing Returns:** If an efficient binary serialization is used for the AST/CST, further general-purpose compression might offer limited gains, especially considering Git's built-in zlib and delta compression on blobs.
+- **Performance Cost:** The overhead of compression/decompression on every filter invocation likely outweighs the benefits.
