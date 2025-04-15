@@ -75,6 +75,8 @@ The proposed system integrates with the existing developer workflow using Git's 
 
 **(Extension Strategy):** This approach functions as a **Git extension** layered onto a standard Git repository via filters configured in `.gitattributes` and `git config`. Developers use standard Git commands (`git add`, `git commit`, `git checkout`, `git diff`). The filters handle the AST/CST conversion transparently. We leverage `libgit2` or standard Git commands for underlying repository interactions.
 
+**For a detailed explanation of how this clean/smudge filter pipeline works, including configuration, scripts, performance considerations, and platform integration challenges, see [Git Clean/Smudge Filters for ASTs](./docs/technical-architecture/clean-smudge-filters.md).**
+
 This architecture aims to keep the developer's core experience largely unchanged while making the underlying versioning structure-aware.
 
 _(For a deeper dive into the design rationale and evaluation, see [docs/project_evaluation_and_design_feedback.md](./docs/project_evaluation_and_design_feedback.md))._
