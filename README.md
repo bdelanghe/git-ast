@@ -59,9 +59,9 @@ This architecture aims to keep the developer's core experience (editing files, u
 - **Semantic Diff/Merge:** Comparing ASTs directly to ignore formatting noise and intelligently handle structural changes (like refactorings) that might conflict textually. This relies on tree-diffing algorithms.
 - **Performance:** As noted in Architecture, storing many small AST node objects could affect Git performance. Mitigation strategies (CLI optimization, Git features, potentially adjusting AST granularity) will be important.
 - **Node Identity:** Reliably tracking the "same" semantic code element (e.g., a function, class, variable) across commits, even if it's moved, renamed, or significantly modified internally. This is crucial for accurate history, blame (`git blame`), and potentially for semantic merge conflict resolution. Without robust identity tracking, moving a function might appear as a deletion and an unrelated addition. Potential solutions include:
-    - **Content-Hashing:** Hashing the content or structure of a node (perhaps excluding volatile parts like comments or exact formatting). Similar nodes across commits would likely have the same hash.
-    - **Unique Identifiers (UIDs):** Embedding stable, unique identifiers directly within the AST nodes during parsing or transformation. These UIDs would persist across commits.
-    - **Heuristic Matching:** Using algorithms to match nodes based on similarity metrics (name, signature, content overlap) during diff/merge operations.
+  - **Content-Hashing:** Hashing the content or structure of a node (perhaps excluding volatile parts like comments or exact formatting). Similar nodes across commits would likely have the same hash.
+  - **Unique Identifiers (UIDs):** Embedding stable, unique identifiers directly within the AST nodes during parsing or transformation. These UIDs would persist across commits.
+  - **Heuristic Matching:** Using algorithms to match nodes based on similarity metrics (name, signature, content overlap) during diff/merge operations.
 - **Tool Compatibility:** Primarily addressed via FUSE and wrapping Git commands. Tools or hooks directly accessing `.git` might require adaptation or need to rely on the generated source views presented by FUSE.
 - **Non-Code Files:** Files without a supported Tree-sitter parser (e.g., images, text documents) will be handled by falling back to standard Git line-based behavior.
 
@@ -72,6 +72,28 @@ This architecture aims to keep the developer's core experience (editing files, u
 ## Related Projects
 
 _(A comparison to other relevant projects, such as AST-based version control systems (e.g., Plastic SCM's semantic merge), semantic diff/merge tools (e.g., `difftastic`, `gumtree`), and code formatters will be added here. This section will clarify the unique scope and approach of Git AST.)_
+
+## Potential Future Direction: MLIR Integration
+
+An intriguing possibility for future development is the integration of the [MLIR (Multi-Level Intermediate Representation)](https://mlir.llvm.org/) framework. MLIR is a powerful compiler infrastructure designed for representing code at multiple levels of abstraction, defining custom operations (dialects), and performing complex transformations.
+
+**How MLIR Could Apply to `git-ast`:**
+
+Instead of directly mapping Tree-sitter ASTs to Git objects, MLIR could serve as the core intermediate representation:
+
+- **Structured Representation:** Source code could be lowered into custom MLIR dialects representing language semantics (e.g., `rust.gitast`) and potentially even Git concepts.
+- **Semantic Operations:** MLIR's infrastructure is built for analysis and transformation. Semantic diffing, merging, and refactoring operations could potentially be implemented as MLIR passes operating directly on the IR.
+- **Node Identity:** MLIR's structured nature might offer more robust ways to track semantic node identity across commits.
+- **Code Generation:** MLIR includes pretty-printing capabilities that could drive the code generation for the FUSE view.
+
+Essentially, `git-ast` could become a system that "compiles" source code changes into MLIR transformations, which are then serialized and stored in Git (perhaps using MLIR's [bytecode format](https://mlir.llvm.org/docs/BytecodeFormat/)).
+
+**Considerations:**
+
+- **Novelty:** Applying MLIR in this manner is outside its typical compiler optimization and hardware targeting use cases.
+- **Complexity:** Integrating MLIR would add significant complexity and a major dependency.
+
+**Status:** This is currently an exploratory idea and **not** part of the core roadmap defined above. It represents a potential long-term evolution or alternative architecture worth investigating once the foundational pieces of `git-ast` are in place.
 
 ## Roadmap
 
