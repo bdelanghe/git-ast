@@ -285,3 +285,21 @@ The performance trade-offs suggest some overhead, but with modern computing reso
 In practice, implementing this system would likely start with a prototype for one language (say Python or JavaScript, which Tree-sitter supports) and gradually generalize. The use of FUSE and hooking Git commands means it can be layered without modifying Git internals, which is a huge advantage. Over time, such a system could evolve from a power tool into a mainstream approach, especially as projects grow larger and the costs of mismerges and legibility issues rise.
 
 This deep analysis shows that while non-trivial, replacing text-based Git with an AST-based layer is within reach. It aligns with the software engineering trend of raising abstraction levels – here we raise version control from lines to syntax trees. The immediate next steps would be to build a proof-of-concept, measure its behavior on real repositories, and refine the design (especially around node identity and performance). If successful, it could usher in a new era of version control where the VCS truly "understands" code structure, leading to more automation and less manual conflict resolution for developers.
+
+## Setup
+
+### Prerequisites
+
+- **Rust Toolchain:** Ensure you have Rust installed. You can get it from [rustup.rs](https://rustup.rs/).
+- **Homebrew (macOS):** If you are on macOS, you will need Homebrew to install system dependencies. You can install it from [brew.sh](https://brew.sh/).
+
+### Dependencies
+
+- **macFUSE (macOS):** The AST Virtual Filesystem relies on FUSE. On macOS, you need to install macFUSE:
+  ```bash
+  brew install macfuse
+  ```
+
+Follow the post-installation instructions provided by the `brew install` command, which may involve system settings changes.
+
+*(Note: Containerized development environments using tools like Docker or Dagger are planned for the future to simplify dependency management across platforms.)*

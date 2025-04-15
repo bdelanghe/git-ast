@@ -1,2 +1,5 @@
 [tools]
-rust = "stable" 
+rust = "stable"
+
+[hooks]
+postinstall = './scripts/mise-postinstall.sh' 
