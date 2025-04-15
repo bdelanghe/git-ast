@@ -1,0 +1,31 @@
+{
+  "type": "source_file",
+  "children": [
+    {
+      "type": "function_item",
+      "name": "add",
+      "parameters": [
+        {"name": "a", "type": "i32"},
+        {"name": "b", "type": "i32"}
+      ],
+      "return_type": "i32",
+      "body": [
+        {
+          "type": "comment",
+          "text": "// Simple addition"
+        },
+        {
+          "type": "binary_expression",
+          "operator": "+",
+          "left": {"type": "identifier", "name": "a"},
+          "right": {"type": "identifier", "name": "b"}
+        }
+      ]
+    },
+    {
+      "type": "function_item",
+      "name": "main",
+      // ... rest of main function structure ...
+    }
+  ]
+} 

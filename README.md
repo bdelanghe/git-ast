@@ -87,6 +87,8 @@ _(For a deeper dive into the design rationale and evaluation, see [docs/project_
 
 (Illustrative examples demonstrating the workflow, [clean/smudge](#glossary) in action, and potential future [semantic diffs/merges](#glossary) will be added here.)
 
+See the `examples/` directory for concrete illustrations of the data transformations involved.
+
 ## Related Projects
 
 Several projects explore semantic version control, AST diffing, or alternative VCS approaches. Understanding them provides context for Git AST:

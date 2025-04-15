@@ -1,0 +1,17 @@
+# Conceptual Text Diff (Logic Change)
+
+# Imagine we change `a + b` to `a - b` in the `add` function.
+# A standard `git diff` shows the line change clearly.
+
+--- a/examples/rust_simple_addition/05_generated_source.rs
++++ b/examples/rust_simple_addition/05_generated_source_modified.rs
+@@ -1,5 +1,5 @@
+ fn add(a: i32, b: i32) -> i32 {
+     // Simple addition
+-    a + b
++    a - b // Changed logic
+ }
+ 
+ fn main() {
+
+} 

@@ -1,0 +1,13 @@
+# Conceptual AST Diff (Logic Change)
+
+# An AST-aware diff would pinpoint the change within the structure,
+# potentially highlighting the operator change directly.
+
+# Output format might vary depending on the diff tool.
+# Example using difftastic-like highlighting:
+
+  fn add(a: i32, b: i32) -> i32 {
+      // Simple addition
+-     a + b
++     a - b
+  } 
