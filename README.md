@@ -1,5 +1,62 @@
 # Git AST
 
+## Project Status
+
+**Current Phase:** Proof of Concept (POC)
+
+The project is currently in the early stages, focusing on building a basic Proof of Concept for the FUSE-based virtual filesystem component using Rust and the `fuser` library. The initial goal is to mount a Git repository and expose a simplified view of its structure.
+
+## Roadmap
+
+This outlines the planned development phases for Git AST.
+
+### Phase 1: FUSE Filesystem POC (Current)
+
+-   [x] Basic FUSE mount setup using `fuser` and `libgit2`.
+-   [ ] Implement basic `lookup`, `getattr`, `readdir` for root directory.
+-   [ ] Read basic Git repository information (e.g., HEAD commit).
+-   [ ] Represent top-level repository files/directories in the FUSE mount.
+
+### Phase 2: Basic AST Representation & Read Operations
+
+-   [ ] Integrate Tree-sitter for a specific language (e.g., Rust or C).
+-   [ ] Parse files from the Git repository into ASTs upon access.
+-   [ ] Define and implement a simple AST-to-filesystem mapping (similar to the `math.c` example).
+    -   Files representing AST nodes (functions, structs, etc.).
+    -   Files representing node properties (name, type, content).
+-   [ ] Implement FUSE `read` operation to generate source code from AST fragments.
+-   [ ] Handle basic navigation of the AST structure via the filesystem.
+
+### Phase 3: Write Operations & Git Integration
+
+-   [ ] Implement FUSE `write` operation.
+-   [ ] Use Tree-sitter's incremental parsing (`edit()`) to update the AST based on file writes.
+-   [ ] Define strategy for mapping AST changes back to Git objects (AST node blobs, tree objects).
+-   [ ] Implement basic `git add` / `git commit` wrapper functionality:
+    -   Serialize the current AST state into Git tree/blob objects.
+    -   Create Git commits representing the AST snapshot.
+
+### Phase 4: Semantic Operations
+
+-   [ ] Implement AST-based `git diff`.
+    -   Perform tree diffs between ASTs.
+    -   Generate human-readable diffs (unified format) highlighting semantic changes.
+-   [ ] Implement AST-based `git merge`.
+    -   Perform three-way AST merges.
+    -   Handle simple non-conflicting changes automatically.
+    -   Develop a strategy for representing/resolving AST conflicts.
+
+### Future Enhancements
+
+-   [ ] Implement AST-based `git blame`.
+-   [ ] Multi-language support via Tree-sitter.
+-   [ ] Performance optimizations (caching, lazy loading).
+-   [ ] Handling of comments, whitespace, and preprocessor directives.
+-   [ ] Stable AST node identification across changes.
+-   [ ] Enhanced CLI wrapper for more Git commands.
+-   [ ] Potential editor integrations (e.g., VS Code extension).
+-   [ ] Containerized development environment (Docker/Dagger).
+
 AST-Based Git System: Architectural Overview and Feasibility Analysis
 
 Motivation and Goals
@@ -303,3 +360,28 @@ This deep analysis shows that while non-trivial, replacing text-based Git with a
 Follow the post-installation instructions provided by the `brew install` command, which may involve system settings changes.
 
 *(Note: Containerized development environments using tools like Docker or Dagger are planned for the future to simplify dependency management across platforms.)*
+
+### Running the POC
+
+1.  **Clone the repository:**
+    ```bash
+    git clone https://github.com/your-username/git-ast.git # Replace with actual URL if different
+    cd git-ast
+    ```
+2.  **Build the project:**
+    ```bash
+    cargo build
+    ```
+3.  **Run the FUSE filesystem:**
+    Create a directory to use as a mount point:
+    ```bash
+    mkdir /tmp/git_mount
+    ```
+    Run the executable, providing the path to a Git repository and the mount point:
+    ```bash
+    # Replace /path/to/your/repo with an actual Git repository path
+    ./target/debug/git-ast /path/to/your/repo /tmp/git_mount 
+    ```
+    The filesystem will mount and run in the foreground. You can explore `/tmp/git_mount` in another terminal. Press Ctrl+C in the terminal where `git-ast` is running to unmount and exit.
+
+**Warning:** This is early-stage software. Use a test repository and mount point. Functionality is currently very limited.
