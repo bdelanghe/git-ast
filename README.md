@@ -2,6 +2,14 @@
 
 Welcome to Git AST! This project provides **language-aware extensions for Git**, leveraging Abstract Syntax Trees ([ASTs](#glossary)) – or more accurately, Concrete Syntax Trees ([CSTs](#glossary)) as produced by tools like [Tree-sitter](#glossary) – instead of traditional line-based diffs. Our goal is to enhance Git with semantic understanding, leading to more meaningful history, easier merges, and enhanced code consistency. We welcome contributions and feedback from the community!
 
+## Value Proposition
+
+Why use Git AST?
+
+- **Cleaner Diffs:** Focus on meaningful code changes, ignore formatting noise.
+- **Smarter Merges:** Reduce conflicts caused by code movement or non-competing structural edits.
+- **Consistent Formatting:** Enforce a canonical code style automatically across your repository.
+
 ## Table of Contents
 
 - [Project Status](#project-status)
