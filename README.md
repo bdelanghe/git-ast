@@ -2,6 +2,8 @@
 
 Welcome to Git AST! This project provides **language-aware extensions for Git**, leveraging Abstract Syntax Trees ([ASTs](#glossary)) – or more accurately, Concrete Syntax Trees ([CSTs](#glossary)) as produced by tools like [Tree-sitter](#glossary) – instead of traditional line-based diffs. Our goal is to enhance Git with semantic understanding, leading to more meaningful history, easier merges, and enhanced code consistency. We welcome contributions and feedback from the community!
 
+**_Note: This project is under active development and driven by the strategic goals outlined in the [Engineering Memo](./docs/STRATEGY_MEMO.md)._**
+
 ## Value Proposition
 
 Why use Git AST?
@@ -15,6 +17,7 @@ Why use Git AST?
 - [Project Status](#project-status)
 - [Motivation](#motivation)
 - [Architecture Overview (Clean/Smudge Filter Approach)](#architecture-overview-cleansmudge-filter-approach)
+- [Key Technologies & Concepts](#key-technologies--concepts)
 - [Core Concepts & Challenges (Condensed)](#core-concepts--challenges-condensed)
 - [Examples](#examples)
 - [Related Projects](#related-projects)
@@ -65,13 +68,13 @@ The proposed system integrates with the existing developer workflow using Git's 
     (Design Consideration: Storing serialized AST/CST might result in larger blob sizes compared to source text, potentially impacting repository size and clone/fetch times. Compression and Git's delta mechanisms should mitigate this, but it requires monitoring. We explicitly avoid mapping AST nodes to Git tree entries to prevent object store explosion).
 - **View (Working Directory Code):** Developers interact with standard source code files in their working directory. These files are generated on-the-fly by the **[smudge filter](#glossary)** when checking out branches or files:
   - The smudge filter reads the canonical AST/CST blob from Git's object store.
-  - It generates the source code text using a deterministic code generator ([pretty-printer](#glossary)), such as Prettier, Black, or a custom one, ensuring consistent formatting.
+  - It generates the source code text using a deterministic code generator ([pretty-printer](#glossary)), primarily **[`dprint`](https://dprint.dev/)**, ensuring consistent formatting.
     (Design Consideration: This implies that the system enforces a specific code style. Custom formatting is typically lost, which is a trade-off for consistency and cleaner diffs. Preserving comments is crucial and must be handled by the parsing/printing process).
 - **Controller (Staging & Parsing via Clean Filter):** When a developer modifies a file and runs `git add` or `git commit`:
   - The **[clean filter](#glossary)** intercepts the file content being staged.
   - It uses [Tree-sitter](#glossary) to parse the source code into an [AST/CST](#glossary).
   - This AST/CST is serialized into the canonical format (e.g., JSON, binary S-expression) which Git then stores as a blob object.
-    (Design Consideration: Parsing happens on staging/commit. If the code fails to parse, the filter must decide whether to fail the operation (forcing valid syntax) or store a representation of the error/fallback to text. The former enforces quality but disrupts workflow; the latter adds complexity. Handling partial parses gracefully is a challenge).
+    (Design Consideration: Parsing happens on staging/commit. If the code fails to parse, the default strategy is to **fail the operation** (forcing valid syntax) to ensure repository integrity. However, to support work-in-progress, developers can use **[AST Fencing](#ast-fencing-proposed)** comments (`// git-ast:fence:start-wip` ... `// git-ast:fence:end-wip`) to mark sections that should be treated as opaque text, allowing commits even if those sections are syntactically incomplete).
 
 **(Extension Strategy):** This approach functions as a **Git extension** layered onto a standard Git repository via filters configured in `.gitattributes` and `git config`. Developers use standard Git commands (`git add`, `git commit`, `git checkout`, `git diff`). The filters handle the AST/CST conversion transparently. We leverage `libgit2` or standard Git commands for underlying repository interactions.
 
@@ -79,7 +82,19 @@ The proposed system integrates with the existing developer workflow using Git's 
 
 This architecture aims to keep the developer's core experience largely unchanged while making the underlying versioning structure-aware.
 
-_(For a deeper dive into the design rationale and evaluation, see [docs/project_evaluation_and_design_feedback.md](./docs/project_evaluation_and_design_feedback.md))._
+_(For a deeper dive into the design rationale, evaluation, and strategic importance, see [docs/STRATEGY_MEMO.md](./docs/STRATEGY_MEMO.md) and [docs/FEEDBACK.md](./docs/FEEDBACK.md))._
+
+## Key Technologies & Concepts
+
+- **[Tree-sitter](#glossary):** The core parsing library. Generates [CSTs](#glossary) preserving comments and structure, crucial for fidelity.
+- **Code Formatters ([`dprint`](https://dprint.dev/)):** The primary choice for the [smudge filter](#glossary) to deterministically generate consistently formatted code from the stored [AST/CST](#glossary). Its plugin architecture supports multiple languages.
+- **AST/CST Serialization:** Defining a robust and deterministic format (e.g., S-expression, CBOR) for storing the parsed structure in Git blobs.
+- **AST Fencing:** A proposed mechanism using special comments (e.g., `// git-ast:fence:start-wip`) to allow committing syntactically incomplete code sections by treating them as opaque text blocks within the AST.
+- **Git [Clean/Smudge Filters](#glossary):** The core integration mechanism, converting between working directory text and repository AST blobs transparently.
+- **[Semantic Diff/Merge](#glossary):** (Future Goal) Comparing stored [ASTs](#glossary) directly to ignore formatting noise and intelligently handle structural changes (e.g., using [GumTree](#glossary)-like algorithms).
+- **Performance Optimization:** Techniques like the Git filter process protocol and parser caching are essential to minimize overhead during Git operations.
+- **[Node Identity](#glossary):** (Future Goal) Reliably tracking semantic code elements across commits, crucial for advanced semantic operations.
+- **Error Handling & Fallbacks:** Strategies for managing parse errors (fail commit by default, allow fencing), handling non-code files (bypass), and potentially falling back to text storage for unsupported or problematic files.
 
 ## Core Concepts & Challenges (Condensed)
 
@@ -147,7 +162,7 @@ For detailed phase descriptions and tasks, please see the [**Full Roadmap Docume
 - **Clean/Smudge Filters:** Git mechanisms that automatically transform file content when it's staged/committed (`clean`) or checked out (`smudge`). `git-ast` uses these to convert between source text (in the working directory) and serialized [AST/CST](#glossary) (stored in Git).
 - **GumTree:** A well-known algorithm for computing differences between two [ASTs](#glossary), producing an edit script (add, delete, move, update operations) that represents the structural changes.
 - **Node Identity:** The challenge of reliably identifying the "same" logical code element (like a specific function or variable) across different versions of an [AST](#glossary), even if it has been moved, renamed, or internally modified. Crucial for accurate [semantic diff/merge](#glossary).
-- **Pretty-Printing:** The process of converting an [AST/CST](#glossary) back into formatted, human-readable source code text. Deterministic pretty-printing ensures the same AST always produces the same output text.
+- **Pretty-Printing:** The process of converting an [AST/CST](#glossary) back into formatted, human-readable source code text. Deterministic pretty-printing ensures the same AST always produces the same output text. We primarily use [`dprint`](https://dprint.dev/) for this.
 - **Semantic Diff/Merge:** Diffing or merging operations that operate on the code's structure ([AST/CST](#glossary)) rather than its textual representation. This allows ignoring formatting changes and intelligently handling structural modifications like code movement.
 - **Tree-sitter:** A parser generator tool and incremental parsing library. It can build a [CST](#glossary) for a source file and efficiently update it as the source file is edited. It supports a wide range of programming languages via community-maintained grammars.
 

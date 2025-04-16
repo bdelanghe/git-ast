@@ -28,9 +28,9 @@ Developers interact only with the source code in their working directory; the AS
 ## 3. Key Technologies & Concepts
 
 *   **Tree-sitter:** The core parsing library. It generates CSTs from source code, handling syntax errors gracefully and preserving comments, which is crucial for round-tripping code accurately. It supports multiple languages via grammars.
-*   **Code Formatters (e.g., `dprint`, `rustfmt`, `prettier`):** Used in the `smudge` process to generate human-readable, consistently formatted code from the AST/CST. `dprint` is a potential candidate due to its pluggable nature and Rust implementation.
-*   **AST Serialization:** A deterministic format (like JSON or S-expressions) is needed to store the AST/CST in Git blobs reliably. Consistency is key to avoid phantom diffs.
-*   **AST Fencing (Proposed):** A mechanism using special comments (e.g., `// git-ast:begin wip`) to mark sections of syntactically incomplete code. This would allow developers to commit work-in-progress without causing the `clean` filter to fail parsing, treating fenced blocks as raw text within the AST structure.
+*   **Code Formatters (e.g., `dprint`):** Used in the `smudge` process to generate human-readable, consistently formatted code from the AST/CST. **[`dprint`](https://dprint.dev/) is the primary choice** due to its speed, pluggable nature supporting multiple languages via WASM plugins, and Rust implementation, aligning well with the potential use of Rust for the core tooling.
+*   **AST Serialization:** A deterministic format (like JSON, S-expression, or potentially a binary format like CBOR for efficiency) is needed to store the AST/CST in Git blobs reliably. Consistency is key to avoid phantom diffs.
+*   **AST Fencing (Proposed):** A mechanism using special comments (e.g., `// git-ast:fence:start-wip` and `// git-ast:fence:end-wip`) to mark sections of syntactically incomplete or intentionally non-parseable code. This allows developers to commit work-in-progress without causing the `clean` filter to fail parsing. The filter would treat fenced blocks as opaque strings or special nodes within the AST structure, preserving them but not parsing their content. This addresses the practical need to commit WIP code while maintaining the integrity of the AST for parseable sections.
 *   **Jujutsu (`jj`) (Potential Integration):**
     *   `git-ast` could integrate *with* `jj`, leveraging its potentially more advanced features or plugin system.
     *   `git-ast` could reuse components *from* `jj`'s Apache 2.0 licensed Rust codebase (e.g., its commit graph logic, revision sets, merge algorithms) to accelerate development.
@@ -50,7 +50,7 @@ To ensure feasibility, the project scope is initially limited. The Minimum Viabl
 ## 5. How Concepts Apply
 
 *   **Tree-sitter:** Foundational parser for the `clean` filter.
-*   **dprint:** Potential formatter for the `smudge` filter.
-*   **AST Fencing:** Addresses the practical need to commit incomplete code within the AST-based system.
+*   **dprint:** Preferred formatter for the `smudge` filter.
+*   **AST Fencing:** Addresses the practical need to commit incomplete code within the AST-based system by treating fenced blocks as opaque data.
 *   **Jujutsu:** Offers potential integration points or reusable code components under its license.
 *   **Git Plugins:** Refers to extending Git via filters, hooks, and custom commands, not a formal plugin architecture within Git itself. 

@@ -1,6 +1,6 @@
 # Go/No-Go Risks and Key Assumptions
 
-This document summarizes the critical risks and assumptions evaluated for the Git AST project.
+This document summarizes the critical risks and assumptions evaluated for the Git AST project. **For a more detailed strategic analysis of risks and mitigations, see [STRATEGY_MEMO.md#strategic-risks-and-mitigations](./STRATEGY_MEMO.md#strategic-risks-and-mitigations).**
 
 ## ✅ Greenlights (Validated Assumptions)
 
@@ -16,25 +16,27 @@ These assumptions have passed research, design alignment, or successful prototyp
 
 ## ⚠️ Yellow Flags (Track Closely)
 
-These assumptions carry risks that need close monitoring and mitigation.
+These assumptions carry risks that need close monitoring and mitigation, as detailed in the strategy memo.
 
-| Assumption                                                     | Risk   | Mitigation                                                                                                                                |
-| :------------------------------------------------------------- | :----: | :---------------------------------------------------------------------------------------------------------------------------------------- |
-| Semantic merge is reliable and improves over Git merge         |   🟡   | If merges silently break logic, trust erodes. SemanticMerge proves the concept but required per-language tuning.                         |
-| Pretty-printing preserves comment placement and formatting enough |   🟡   | Poor formatting or dropped comments are immediate no-gos for dev trust.                                                                    |
-| Git hosts (e.g., GitHub) are usable with AST blobs             |   🟡   | GitHub PR views will not show readable diffs by default. This degrades review UX unless mitigated.                                           |
-| Tooling (e.g., CI) remains compatible                          |   🟡   | Lint, test, or format steps may operate on smudged code, but if they use repo blobs directly, behavior could differ.                    |
+| Assumption                                                     | Risk   | Mitigation Summary (See Memo for Details)                                                                                        |
+| :------------------------------------------------------------- | :----: | :------------------------------------------------------------------------------------------------------------------------------- |
+| Semantic merge is reliable and improves over Git merge         |   🟡   | Extensive testing, clear fallback strategy, potentially phased rollout (diff first). Start simple, verify correctness rigorously. |
+| Pretty-printing preserves comment placement and formatting enough |   🟡   | Use CSTs, choose robust formatters (`dprint`), extensive round-trip testing. Failure here breaks trust immediately.             |
+| Git hosts (e.g., GitHub) are usable with AST blobs             |   🟡   | Requires custom diff driver configuration or acceptance of non-ideal web UI diffs initially. Plan for platform integration work. |
+| Tooling (e.g., CI) remains compatible                          |   🟡   | Ensure filters run correctly in CI; verify tools operating on checkout vs. blobs.                                                  |
+| Performance overhead is acceptable                             |   🟡   | Optimize filters (process protocol, caching), monitor metrics, possibly scope down for large files. Target <1.5x slowdown.       |
+| Developer adoption / cultural fit                              |   🟡   | Clear communication, opt-in pilots, address blame/workflow concerns, provide escape hatches.                                      |
 
 ## ❌ Red Flags (No-Go If Fails)
 
-Failure to meet these assumptions would likely make the project untenable.
+Failure to meet these assumptions would likely make the project untenable, as detailed in the strategy memo.
 
-| Assumption                                      | Go/No-Go Risk | Required Action                                                                                           |
-| :---------------------------------------------- | :-----------: | :-------------------------------------------------------------------------------------------------------- |
-| AST round-trip is not lossy (no semantic drift) |       ❌       | Any loss of code meaning (e.g., changing behavior or dropping required syntax) invalidates the approach. |
-| Developers can trust the merge logic            |       ❌       | If merge drops edits, rewrites intent, or fails without clear UI, trust collapses.                           |
-| Parsing doesn't block commit flow               |       ❌       | If `git add` or `git commit` fail regularly due to parse errors, devs will reject it.                     |
-| No object bloat or Git performance regression   |       ❌       | If Git slows due to too many objects or large AST blobs, adoption dies.                                     |
+| Assumption                                      | Go/No-Go Risk | Required Action / Implication if Fails                                                                                             |
+| :---------------------------------------------- | :-----------: | :--------------------------------------------------------------------------------------------------------------------------------------- |
+| AST round-trip is not lossy (no semantic drift) |       ❌       | Invalidates the approach. Requires halting/re-evaluating core parsing/printing fidelity. Cannot compromise correctness.                 |
+| Developers can trust the merge logic            |       ❌       | If merge silently drops edits or introduces errors, trust collapses. Requires robust testing and safe fallback/conflict marking.         |
+| Parsing doesn't block commit flow unreasonably  |       ❌       | If `git add`/`commit` fail frequently or unpredictably (even with fencing), devs will reject it. Requires robust error handling/fencing. |
+| No major object bloat or Git performance regression |       ❌       | If Git slows unacceptably due to size/object count, adoption dies. Requires monitoring and potentially binary serialization/optimisation. |
 
 ## 📌 Summary
 

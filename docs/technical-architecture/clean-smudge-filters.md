@@ -205,3 +205,26 @@ While filters _could_ technically add another layer of compression, this is gene
 - **Complexity:** Adds another step to both clean and smudge.
 - **Diminishing Returns:** If an efficient binary serialization is used for the AST/CST, further general-purpose compression might offer limited gains, especially considering Git's built-in zlib and delta compression on blobs.
 - **Performance Cost:** The overhead of compression/decompression on every filter invocation likely outweighs the benefits.
+
+### Smudge Filter (`.git/info/attributes` or `.gitattributes`)
+
+1.  **Trigger:** `git checkout`, `git reset`, `git merge`, etc.
+2.  **Input:** Serialized AST/CST blob from Git object store.
+3.  **Process:**
+    - Deserialize the blob back into an in-memory AST/CST structure.
+    - Feed the AST/CST to a deterministic pretty-printer/formatter.
+    - **Tooling:** The primary choice is **[`dprint`](https://dprint.dev/)** due to its speed, pluggable architecture (WASM), and ability to handle multiple languages consistently. Standard formatters like `rustfmt` or `black` are fallback options if `dprint` plugins are unavailable or insufficient for a specific language.
+    - The formatter generates standard source code text based on the canonical AST/CST.
+4.  **Output:** Formatted source code text, written to the working directory.
+
+### Error Handling Strategies
+
+Filters need robust error handling:
+
+-   **Clean Filter Errors (Parsing):**
+    -   **Syntax Errors:** If `tree-sitter` fails to parse the input file due to syntax errors:
+        -   **Default Strategy (Recommended):** Fail the filter (return non-zero exit code). This causes `git add` or `git commit` to abort, forcing the developer to fix the syntax before proceeding. Ensures repository integrity (only parseable code is stored).
+        -   **Work-in-Progress (WIP) Support via AST Fencing:** To allow committing incomplete code, implement **AST Fencing**. Developers use special comments (e.g., `// git-ast:fence:start-wip` and `// git-ast:fence:end-wip`) to delimit sections. The `clean` filter recognizes these fences, parses the code *outside* the fences, and stores the fenced content as an opaque string or a special 'raw text' node within the AST. This allows commits to proceed even with syntax errors inside fenced blocks, preserving WIP state without breaking the overall AST structure for parseable sections.
+        -   **Fallback (Rare Cases):** If parsing fails catastrophically even outside fences, or for explicitly excluded files, the filter could potentially fall back to storing the raw text blob (needs clear identification to avoid breaking semantic tools later).
+    -   **Parser Crashes/Internal Errors:** The filter script should catch unexpected exceptions from the parser/serializer and fail gracefully with a clear error message.
+    -   **Unsupported File Type:** If the file extension is not configured for AST handling, the filter should be a no-op (pass data through unchanged).
