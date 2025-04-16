@@ -1,6 +1,6 @@
 # Project Roadmap
 
-The project is divided into phases, focusing on building foundational capabilities first using the clean/smudge filter architecture.
+The project is divided into phases, focusing on building foundational capabilities first using the clean/smudge filter architecture. **For strategic context, timelines, and management plan, see [STRATEGY_MEMO.md](./STRATEGY_MEMO.md).**
 
 ## Phase 1: Basic AST Parsing & Clean/Smudge POC (Current Focus - Effort: Medium)
 
@@ -15,17 +15,17 @@ The project is divided into phases, focusing on building foundational capabiliti
 - [ ] Implement a basic `smudge` filter script/program:
   - Takes serialized AST data as input.
   - Deserializes it into an in-memory AST.
-  - Generates formatted source code using a deterministic pretty-printer (e.g., integrate `rustfmt` or `black`).
+  - Generates formatted source code using a deterministic pretty-printer (e.g., integrate [`dprint`](https://dprint.dev/)).
   - Outputs the source code text.
-- [ ] Configure `.gitattributes` and `git config` to use these filters for the chosen language.
-- [ ] Document the chosen serialization format and initial pretty-printing strategy.
+- [ ] Configure `.gitattributes` and `git config` to use these filters for the chosen language (`*.rs filter=git-ast`, etc.).
+- [ ] Document the chosen serialization format (e.g., S-expression, CBOR) and initial pretty-printing strategy (using `dprint`).
 
 **Success Criteria / Testing:**
-- **Round-Trip Fidelity:** On a curated test suite of diverse Rust files (covering common language features, comments, different formatting styles):
+- **Round-Trip Fidelity:** On a curated test suite of diverse files for the chosen language (covering common language features, comments, different formatting styles):
   - Verify `git add -> git checkout` results in formatted code that is semantically identical to the original (passes original tests/builds).
   - Verify 100% of comments are preserved and reasonably placed.
   - Verify `clean` filter output is deterministic (byte-for-byte identical for the same input).
-- **Error Handling:** Committing a file with a syntax error reliably fails the `clean` filter with a clear error message.
+- **Error Handling:** Committing a file with a syntax error reliably fails the `clean` filter with a clear error message (unless [AST Fencing](#ast-fencing-proposed) is used for designated WIP blocks).
 - **Basic Workflow:** Standard `git add`, `commit`, `checkout`, `log`, `status` commands function correctly on a test repository using the filters.
 
 **Go/No-Go Decision Point:**
@@ -37,15 +37,15 @@ The project is divided into phases, focusing on building foundational capabiliti
 **Goal:** Improve filter performance, error handling, and establish the canonical AST storage in Git.
 
 - [ ] Optimize filter performance (e.g., using Git filter process protocol, caching parsers/printers).
-- [ ] Implement robust error handling in filters (e.g., strategy for parse failures - fail commit vs. store error marker/fallback).
-- [ ] Finalize the AST serialization format for space efficiency and stability (consider binary formats like CBOR if text-based proves too large).
+- [ ] Implement robust error handling in filters (e.g., fail commit on parse error, but support [AST Fencing](#ast-fencing-proposed) for WIP blocks; potentially offer fallback to text storage for unhandled file types or severe errors).
+- [ ] Finalize the AST serialization format for space efficiency and stability (consider binary formats like CBOR if text-based proves too large, based on Phase 1/Pilot data).
 - [ ] Develop utilities or tests to verify AST integrity and round-trip consistency (parse->store->retrieve->print->parse) at scale.
-- [ ] Implement handling for non-code files (bypass filters based on file extension/type).
+- [ ] Implement handling for non-code files (bypass filters based on file extension/type, configurable via `.gitattributes`).
 
 **Success Criteria / Testing:**
-- **Performance:** Measure filter overhead on common operations (`add`, `commit`, `checkout`) on a moderately sized repository (e.g., 100-500 files, 10k-100k LOC). Overhead should ideally be < 10-20% compared to standard Git operations for incremental changes. Bulk operations should remain usable (e.g., full checkout within 2x standard time).
-- **Robustness:** Filters handle parse errors according to the chosen strategy without crashing. Non-code files are correctly ignored. Round-trip consistency holds under stress testing (e.g., concurrent operations, large files).
-- **Storage:** Monitor repository size growth compared to a text-only baseline. Ensure growth is acceptable (e.g., < 2-3x after Git compression for typical workloads).
+- **Performance:** Measure filter overhead on common operations (`add`, `commit`, `checkout`) on a moderately sized repository (e.g., 100-500 files, 10k-100k LOC). Overhead should ideally be < 10-20% (max ~1.5x) compared to standard Git operations for incremental changes. Bulk operations should remain usable (e.g., full checkout within 2x standard time).
+- **Robustness:** Filters handle parse errors according to the chosen strategy (fail or fence) without crashing. Non-code files are correctly ignored. Round-trip consistency holds under stress testing (e.g., concurrent operations, large files). AST Fencing allows committing WIP code.
+- **Storage:** Monitor repository size growth compared to a text-only baseline. Ensure growth is acceptable (e.g., < 2-3x after Git compression for typical workloads). Decide on text vs. binary serialization based on data.
 
 **Go/No-Go Decision Point:**
 - **GO:** Proceed to Phase 3 if performance overhead is acceptable, error handling is robust, non-code files are handled correctly, and storage growth is manageable.
@@ -99,12 +99,12 @@ The project is divided into phases, focusing on building foundational capabiliti
 
 ## Phase 5: Multi-Language Support & Refinements (Effort: Ongoing/Variable per Language)
 
-**Goal:** Extend support to more languages and refine core functionality based on user feedback.
+**Goal:** Extend support to more languages and refine core functionality based on user feedback and strategic priorities.
 
-- [ ] Add support for additional high-priority languages (e.g., Python, JavaScript) by integrating their Tree-sitter grammars and appropriate pretty-printers/formatters. Document setup for each.
+- [ ] Add support for additional high-priority languages (e.g., Python, JavaScript, prioritized based on internal needs) by integrating their Tree-sitter grammars and appropriate `dprint` plugins or other formatters. Document setup for each.
 - [ ] Refine AST diff/merge algorithms based on experience (e.g., improve move detection, handling of specific language constructs identified in earlier phases).
 - [ ] Investigate and address node identity tracking for more accurate history analysis (`git blame` aware of AST) - May become a dedicated phase if complex.
-- [ ] Develop strategies for improving compatibility with external tools (e.g., CI systems, code review platforms - might involve generating text diffs on demand or specific integrations if diff driver isn't sufficient).
+- [ ] Develop strategies for improving compatibility with external tools (e.g., CI systems, code review platforms - might involve generating text diffs on demand, custom diff viewers, or specific integrations if diff driver isn't sufficient).
 
 **Success Criteria / Testing:**
 - **Language Support:** Successfully demonstrate Phases 1-4 capabilities for each newly added language on representative test projects.
